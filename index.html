@@ -3,21 +3,23 @@
 <head>
     <title>GoDice Haptic Pro</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <script src="https://unpkg.com"></script>
+    <!-- Cargamos la librería desde un servidor mundial muy estable -->
+    <script src="https://jsdelivr.net"></script>
     <style>
         body { font-family: sans-serif; text-align: center; padding: 20px; background: #121212; color: #00ff00; }
-        button { padding: 15px; font-size: 18px; border-radius: 10px; border: none; cursor: pointer; margin: 10px; width: 80%; }
-        .btn-conectar { background: #28a745; color: white; }
+        button { padding: 15px; font-size: 18px; border-radius: 10px; border: none; cursor: pointer; margin: 10px; width: 80%; font-weight: bold; }
+        .btn-conectar { background: #28a745; color: white; box-shadow: 0 4px #1e7e34; }
+        .btn-conectar:active { box-shadow: 0 2px #1e7e34; transform: translateY(2px); }
         .btn-repetir { background: #007bff; color: white; display: none; }
-        #status { font-size: 22px; margin-top: 20px; color: #ffcc00; min-height: 40px; }
-        #lista { font-size: 20px; color: #00e5ff; margin-top: 10px; font-weight: bold; }
+        #status { font-size: 20px; margin-top: 20px; color: #ffcc00; min-height: 40px; border: 1px solid #333; padding: 10px; }
+        #lista { font-size: 24px; color: #00e5ff; margin-top: 10px; font-weight: bold; }
     </style>
 </head>
 <body>
     <h1>GoDice Haptic</h1>
-    <button id="connect" class="btn-conectar">CONECTAR DADOS</button>
-    <button id="repeat" class="btn-repetir">REPETIR ÚLTIMA TIRADA</button>
-    <div id="status">Esperando conexión...</div>
+    <button id="connect" class="btn-conectar">1. CONECTAR DADOS</button>
+    <button id="repeat" class="btn-repetir">REPETIR VIBRACIÓN</button>
+    <div id="status">Presiona el botón verde con el Bluetooth encendido</div>
     <div id="lista"></div>
 
     <script>
@@ -31,7 +33,14 @@
         const listaDiv = document.getElementById('lista');
         const btnRepetir = document.getElementById('repeat');
 
-        document.getElementById('connect').onclick = () => goDice.requestDevice();
+        document.getElementById('connect').onclick = async () => {
+            statusDiv.innerText = "Buscando dados... (Acepta el permiso)";
+            try {
+                await goDice.requestDevice();
+            } catch (e) {
+                statusDiv.innerText = "Error: " + e.message;
+            }
+        };
         
         btnRepetir.onclick = () => {
             if (!procesando) {
@@ -47,25 +56,22 @@
             btnRepetir.style.display = "none";
 
             while (contadorRepeticiones <= 2 && !abortar) {
-                statusDiv.innerText = (contadorRepeticiones === 0) ? "Vibrando resultados..." : `Repetición ${contadorRepeticiones}/2`;
-                
+                statusDiv.innerText = (contadorRepeticiones === 0) ? "Vibrando..." : `Repitiendo ${contadorRepeticiones}/2`;
                 for (let valor of resultados) {
                     if (abortar) break;
                     let patron = [];
-                    for (let i = 0; i < valor; i++) { patron.push(200, 150); }
+                    for (let i = 0; i < valor; i++) { patron.push(250, 200); }
                     navigator.vibrate(patron);
-                    await new Promise(r => setTimeout(r, 2000 + (valor * 350)));
+                    await new Promise(r => setTimeout(r, 2000 + (valor * 450)));
                 }
-
                 if (abortar) break;
                 contadorRepeticiones++;
                 if (contadorRepeticiones <= 2) {
-                    statusDiv.innerText = "Espera de 5s...";
+                    statusDiv.innerText = "Pausa de 5s...";
                     await new Promise(r => setTimeout(r, 5000));
                 }
             }
-
-            if (!abortar) statusDiv.innerText = "Ciclo finalizado.";
+            if (!abortar) statusDiv.innerText = "Listo.";
             procesando = false;
             btnRepetir.style.display = "inline-block";
         }
@@ -73,21 +79,23 @@
         goDice.onStable = (id, value) => {
             if (!procesando) resultados = [];
             resultados.push(value);
-            listaDiv.innerText = "Dados: " + resultados.join(" - ");
+            listaDiv.innerText = "DADOS: " + resultados.join(" - ");
             clearTimeout(window.timerInicio);
             window.timerInicio = setTimeout(() => {
                 contadorRepeticiones = 0;
                 ejecutarVibraciones();
-            }, 1200);
+            }, 1500);
         };
 
         goDice.onRollStart = () => {
             abortar = true;
-            statusDiv.innerText = "¡Rodando!";
-            btnRepetir.style.display = "none";
+            statusDiv.innerText = "¡Dados rodando!";
         };
         
-        goDice.onConnected = () => statusDiv.innerText = "Dados conectados. ¡Tira!";
+        goDice.onConnected = () => {
+            statusDiv.innerText = "¡CONECTADO! Ya puedes tirar.";
+            document.getElementById('connect').style.display = "none";
+        };
     </script>
 </body>
 </html>
