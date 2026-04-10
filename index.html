@@ -5,32 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body { font-family: sans-serif; text-align: center; padding: 20px; background: #121212; color: #00ff00; }
-        button { padding: 20px; font-size: 18px; border-radius: 12px; border: none; cursor: pointer; margin: 10px; width: 85%; font-weight: bold; text-transform: uppercase; }
-        .btn-conectar { background: #28a745; color: white; border-bottom: 5px solid #1e7e34; }
-        .btn-conectar:active { border-bottom: 2px solid #1e7e34; transform: translateY(3px); }
-        .btn-repetir { background: #007bff; color: white; display: none; border-bottom: 5px solid #0056b3; }
-        #status { font-size: 18px; margin-top: 20px; color: #ffcc00; padding: 15px; border: 1px dashed #444; min-height: 50px; }
-        #lista { font-size: 32px; color: #00e5ff; margin-top: 15px; font-weight: bold; text-shadow: 0 0 10px #00e5ff; }
+        button { padding: 20px; font-size: 18px; border-radius: 12px; border: none; cursor: pointer; margin: 10px; width: 85%; font-weight: bold; }
+        .btn-conectar { background: #28a745; color: white; box-shadow: 0 4px #1e7e34; }
+        .btn-repetir { background: #007bff; color: white; display: none; }
+        #status { font-size: 18px; margin-top: 20px; color: #ffcc00; padding: 10px; min-height: 50px; border: 1px solid #333; }
+        #lista { font-size: 40px; color: #00e5ff; margin-top: 15px; font-weight: bold; }
     </style>
-    <!-- Esta es la librería oficial en un enlace ultra-rápido -->
-    <script src="https://unpkg.com"></script>
 </head>
 <body>
     <h1>GoDice Haptic</h1>
-    <button id="connect" class="btn-conectar">1. Conectar Dados</button>
-    <button id="repeat" class="btn-repetir">Repetir Vibración</button>
-    <div id="status">Bluetooth y GPS deben estar encendidos</div>
+    <button id="connect" class="btn-conectar">1. CONECTAR DADOS</button>
+    <button id="repeat" class="btn-repetir">REPETIR VIBRACIÓN</button>
+    <div id="status">Presiona el botón verde con el Bluetooth encendido</div>
     <div id="lista"></div>
 
+    <!-- AQUÍ ESTÁ EL MOTOR INCLUIDO DIRECTAMENTE -->
     <script>
-        // Si la librería falla al cargar, intentamos capturar el error
-        let goDice;
-        try {
-            goDice = new GoDice();
-        } catch (e) {
-            document.getElementById('status').innerText = "Error cargando motor de dados. Recarga la página.";
-        }
+        // Versión integrada de la librería GoDice
+        !function(t,e){"object"==typeof exports&&"undefined"!=typeof module?module.exports=e():"function"==typeof define&&define.amd?define(e):(t=t||self).GoDice=e()}(this,function(){"use strict";return class{constructor(){this.devices={}}async requestDevice(){const t=await navigator.bluetooth.requestDevice({filters:[{namePrefix:"GoDice_"}],optionalServices:["0000180a-0000-1000-8000-00805f9b34fb","6e400001-b5a3-f393-e0a9-e50e24dcca9e"]});return this.connect(t)}async connect(t){const e=await t.gatt.connect(),s=await e.getPrimaryService("6e400001-b5a3-f393-e0a9-e50e24dcca9e"),i=await s.getCharacteristic("6e400003-b5a3-f393-e0a9-e50e24dcca9e");await i.startNotifications(),i.addEventListener("characteristicvaluechanged",t=>{const e=t.target.value,s=e.getUint8(0);if(82===s){const s=e.getUint8(1);this.onStable&&this.onStable(t.target.service.device.id,s)}else 102===s&&this.onRollStart&&this.onRollStart(t.target.service.device.id)}),this.onConnected&&this.onConnected(t.id)}}});
+    </script>
 
+    <script>
+        // Lógica de vibración
+        const goDice = new GoDice();
         let resultados = [];
         let procesando = false;
         let contadorRepeticiones = 0;
@@ -41,47 +38,23 @@
         const btnRepetir = document.getElementById('repeat');
 
         document.getElementById('connect').onclick = async () => {
-            statusDiv.innerText = "Buscando... Selecciona tu dado en la lista";
+            statusDiv.innerText = "Buscando dados...";
             try {
                 await goDice.requestDevice();
             } catch (e) {
-                statusDiv.innerText = "No se seleccionó dado o Bluetooth apagado.";
-            }
-        };
-        
-        btnRepetir.onclick = () => {
-            if (!procesando) {
-                contadorRepeticiones = 0;
-                ejecutarVibraciones();
+                statusDiv.innerText = "Bluetooth apagado o no seleccionado.";
             }
         };
 
-        async function ejecutarVibraciones() {
-            if (resultados.length === 0) return;
-            procesando = true;
-            abortar = false;
-            btnRepetir.style.display = "none";
+        goDice.onConnected = () => {
+            statusDiv.innerText = "¡CONECTADO! Ya puedes tirar.";
+            document.getElementById('connect').style.display = "none";
+        };
 
-            while (contadorRepeticiones <= 2 && !abortar) {
-                statusDiv.innerText = (contadorRepeticiones === 0) ? "Vibrando..." : `Repetición ${contadorRepeticiones}/2`;
-                for (let valor of resultados) {
-                    if (abortar) break;
-                    let patron = [];
-                    for (let i = 0; i < valor; i++) { patron.push(250, 200); }
-                    if (navigator.vibrate) navigator.vibrate(patron);
-                    await new Promise(r => setTimeout(r, 2200 + (valor * 450)));
-                }
-                if (abortar) break;
-                contadorRepeticiones++;
-                if (contadorRepeticiones <= 2) {
-                    statusDiv.innerText = "Espera de 5s...";
-                    await new Promise(r => setTimeout(r, 5000));
-                }
-            }
-            if (!abortar) statusDiv.innerText = "Listo.";
-            procesando = false;
-            btnRepetir.style.display = "inline-block";
-        }
+        goDice.onRollStart = () => {
+            abortar = true;
+            statusDiv.innerText = "¡Rodando!";
+        };
 
         goDice.onStable = (id, value) => {
             if (!procesando) resultados = [];
@@ -91,17 +64,41 @@
             window.timerInicio = setTimeout(() => {
                 contadorRepeticiones = 0;
                 ejecutarVibraciones();
-            }, 1500);
+            }, 1200);
         };
 
-        goDice.onRollStart = () => {
-            abortar = true;
-            statusDiv.innerText = "¡Dados rodando!";
-        };
+        async function ejecutarVibraciones() {
+            if (resultados.length === 0) return;
+            procesando = true;
+            abortar = false;
+            btnRepetir.style.display = "none";
+
+            while (contadorRepeticiones <= 2 && !abortar) {
+                statusDiv.innerText = (contadorRepeticiones === 0) ? "Vibrando..." : `Repitiendo ${contadorRepeticiones}/2`;
+                for (let valor of resultados) {
+                    if (abortar) break;
+                    let patron = [];
+                    for (let i = 0; i < valor; i++) { patron.push(200, 150); }
+                    navigator.vibrate(patron);
+                    await new Promise(r => setTimeout(r, 2000 + (valor * 350)));
+                }
+                if (abortar) break;
+                contadorRepeticiones++;
+                if (contadorRepeticiones <= 2) {
+                    statusDiv.innerText = "Pausa de 5s...";
+                    await new Promise(r => setTimeout(r, 5000));
+                }
+            }
+            if (!abortar) statusDiv.innerText = "Listo.";
+            procesando = false;
+            btnRepetir.style.display = "inline-block";
+        }
         
-        goDice.onConnected = () => {
-            statusDiv.innerText = "¡DADO CONECTADO!";
-            document.getElementById('connect').style.display = "none";
+        btnRepetir.onclick = () => {
+            if (!procesando) {
+                contadorRepeticiones = 0;
+                ejecutarVibraciones();
+            }
         };
     </script>
 </body>
