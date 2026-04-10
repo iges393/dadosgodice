@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GoDice Haptic Pro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://github.io"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 20px; background: #121212; color: #00ff00; }
+        button { padding: 15px; font-size: 18px; border-radius: 10px; border: none; cursor: pointer; margin: 10px; width: 80%; }
+        .btn-conectar { background: #28a745; color: white; }
+        .btn-repetir { background: #007bff; color: white; display: none; }
+        #status { font-size: 22px; margin-top: 20px; color: #ffcc00; min-height: 40px; }
+        #lista { font-size: 20px; color: #00e5ff; margin-top: 10px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>GoDice Haptic</h1>
+    <button id="connect" class="btn-conectar">CONECTAR DADOS</button>
+    <button id="repeat" class="btn-repetir">REPETIR ÚLTIMA TIRADA</button>
+    <div id="status">Esperando conexión...</div>
+    <div id="lista"></div>
+
+    <script>
+        const goDice = new GoDice();
+        let resultados = [];
+        let procesando = false;
+        let contadorRepeticiones = 0;
+        let abortar = false;
+
+        const statusDiv = document.getElementById('status');
+        const listaDiv = document.getElementById('lista');
+        const btnRepetir = document.getElementById('repeat');
+
+        document.getElementById('connect').onclick = () => goDice.requestDevice();
+        
+        btnRepetir.onclick = () => {
+            if (!procesando) {
+                contadorRepeticiones = 0;
+                ejecutarVibraciones();
+            }
+        };
+
+        async function ejecutarVibraciones() {
+            if (resultados.length === 0) return;
+            procesando = true;
+            abortar = false;
+            btnRepetir.style.display = "none";
+
+            while (contadorRepeticiones <= 2 && !abortar) {
+                statusDiv.innerText = (contadorRepeticiones === 0) ? "Vibrando resultados..." : `Repetición ${contadorRepeticiones}/2`;
+                
+                for (let valor of resultados) {
+                    if (abortar) break;
+                    let patron = [];
+                    for (let i = 0; i < valor; i++) { patron.push(200, 150); }
+                    navigator.vibrate(patron);
+                    await new Promise(r => setTimeout(r, 2000 + (valor * 350)));
+                }
+
+                if (abortar) break;
+                contadorRepeticiones++;
+                if (contadorRepeticiones <= 2) {
+                    statusDiv.innerText = "Espera de 5s...";
+                    await new Promise(r => setTimeout(r, 5000));
+                }
+            }
+
+            if (!abortar) statusDiv.innerText = "Ciclo finalizado.";
+            procesando = false;
+            btnRepetir.style.display = "inline-block";
+        }
+
+        goDice.onStable = (id, value) => {
+            if (!procesando) resultados = [];
+            resultados.push(value);
+            listaDiv.innerText = "Dados: " + resultados.join(" - ");
+            clearTimeout(window.timerInicio);
+            window.timerInicio = setTimeout(() => {
+                contadorRepeticiones = 0;
+                ejecutarVibraciones();
+            }, 1200);
+        };
+
+        goDice.onRollStart = () => {
+            abortar = true;
+            statusDiv.innerText = "¡Rodando!";
+            btnRepetir.style.display = "none";
+        };
+        
+        goDice.onConnected = () => statusDiv.innerText = "Dados conectados. ¡Tira!";
+    </script>
+</body>
+</html>
